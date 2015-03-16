@@ -59,4 +59,4 @@ listenOnDatabase("music_queue", 1000, function (err, data) {
 		console.log(track);
 		exec("mpc add " + track);
 	}
-}
+});
