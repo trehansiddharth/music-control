@@ -1,99 +1,144 @@
 var mongo = require("mongodb");
 var sys = require('sys');
 var exec = require('child_process').exec;
+var MongoOplog = require("mongo-oplog");
+var mpd = require("mpd");
+var cmd = mpd.cmd;
 
 var MONGO_USERNAME = process.env.MONGO_USERNAME;
 var MONGO_PASSWORD = process.env.MONGO_PASSWORD;
-var MONGO_URL = process.env.MONGO_URL;
+var MONGO_HOSTNAME = process.env.MONGO_HOSTNAME;
+var MONGO_DATABASE = process.env.MONGO_DATABASE;
 
-var mongodbUri = "mongodb://" + MONGO_USERNAME + ":" + MONGO_PASSWORD + "@" + MONGO_URL;
+var mongodbAuth = "";
+if (!(MONGO_USERNAME == "" || MONGO_PASSWORD == "")) {
+	mongodbAuth = MONGO_USERNAME + ":" + MONGO_PASSWORD + "@";
+}
+var mongodbUri = "mongodb://" + mongodbAuth + MONGO_HOSTNAME + "/" + MONGO_DATABASE;
+var mongodbUriLocal = "mongodb://" + mongodbAuth + MONGO_HOSTNAME + "/local";
 
-function listenOnDatabase(db, collectionName, timeout, callback) {
-	db.collection(collectionName, function (err, collection) {
+console.log("Connecting to database at:");
+console.log(mongodbUri);
+
+music_queries = undefined;
+
+function resolve(id, result) {
+	music_queries.update({ _id : id }, { $set : { waiting : false, result : result } });
+}
+
+function handleQuery(query) {
+	console.log("Query is:");
+	console.log(query);
+	if (query.waiting) {
+		var id = query._id;
+		var command = query.command;
+		var arguments = query.arguments;
+		switch (command) {
+			case "enqueue":
+				var track = arguments[0];
+				client.sendCommand(cmd("add", [track]), function (err, msg) {
+					if (err) {
+						console.log("Error when enqueueing:");
+						console.log(err);
+					} else {
+						console.log("Enqueueing successful:");
+						console.log(msg);
+						resolve(id, []);
+					}
+				});
+				break;
+			case "raw_command":
+				var raw_command = arguments[0];
+				var raw_arguments = arguments.slice(1);
+				client.sendCommand(cmd(raw_command, raw_arguments), function (err, msg) {
+					if (err) {
+						console.log("Error when executing raw command:");
+						console.log(err);
+					} else {
+						console.log("Executing raw command successful.");
+						resolve(id, msg);
+					}
+				});
+				break;
+			case "search":
+				var type = arguments[0];
+				var search_query = arguments[1];
+				client.sendCommand(cmd("find", [type, search_query]), function (err, msg) {
+					if (err) {
+						console.log("Error when searching music database:");
+						console.log(err);
+					} else {
+						lines = msg.match(/[^\r\n]+/g);
+						results = [];
+						file = {};
+						for (i = 0; i < lines.length; i++) {
+							line = lines[i];
+							pair = line.split(": ");
+							if (pair[0] == "file") {
+								results.push(file);
+								file = {};
+							}
+							file[pair[0]] = pair[1];
+						}
+						results = results.splice(1);
+						resolve(id, results);
+					}
+				});
+				break;
+		}
+	}
+}
+
+function node(db, tmp_music_queries) {
+	music_queries = tmp_music_queries;
+	console.log("Fetched music_queries successfully.");
+	var oplog = MongoOplog(mongodbUriLocal, "meteor.music_queries").tail();
+	oplog.on("insert", function (data) {
+		console.log("Got insert.")
+		handleQuery(data.o);
+	});
+	oplog.on("update", function (data) {
+		console.log("Got update.")
+		var id = data.o2._id;
+		music_queries.findOne({ _id : id }, function (err, query) {
+			if (err) {
+				console.log("Error while fetching object of update:");
+				console.log(err);
+			} else {
+				console.log("Successfully fetched object of query.");
+				handleQuery(query);
+			}
+		});
+	});
+}
+
+var MPD_HOST = process.env.MPD_HOST;
+var MPD_PORT = process.env.MPD_PORT;
+
+console.log("Connecting to MPD socket at:");
+console.log(MPD_HOST + ":" + MPD_PORT);
+
+var client = mpd.connect({
+	port: MPD_PORT,
+	host: MPD_HOST,
+});
+
+client.on("ready", function () {
+	console.log("Successfully connected to MPD.");
+		mongo.MongoClient.connect(mongodbUri, function (err, db) {
 		if (err) {
-			console.log("Error while getting collection:");
+			console.log("Error while connecting:");
 			console.log(err);
 		} else {
-			console.log("Collection opened successfully.");
-			var conditions = {};
-			var latestCursor = collection.find(conditions).sort({ $natural : -1 }).limit(1);
-			latestCursor.nextObject(function (err, latest) {
+			console.log("Connected successfully.");
+			db.collection("music_queries", function (err, tmp_music_queries) {
 				if (err) {
-					console.log("Error while getting next object of latest cursor:");
+					console.log("Error while fetching music_queries collection:");
 					console.log(err);
 				} else {
-					console.log("Got latest document successfully.");
-					conditions._id = {$gt: latest._id};
-					var options = { tailable : true, awaitData : true, numberOfRetries : 0 };
-					var cursor = collection.find(conditions, options);
-					(function next() {
-						cursor.nextObject(function (err, data) {
-							callback(err, data);
-							setTimeout(function () {
-								next();
-							}, timeout);
-						});
-					})();
+					node(db, tmp_music_queries);
 				}
 			});
 		}
 	});
-}
-
-
-mongo.MongoClient.connect(mongodbUri, function (err, db) {
-	if (err) {
-		console.log("Error while connecting:");
-		console.log(err);
-	} else {
-		console.log("Connected successfully.");
-		listenOnDatabase(db, "music_queue", 1000, function (err, data) {
-			if (err) {
-				console.log("Error while getting next object of tailable cursor of music_queue:");
-				console.log(err);
-			} else {
-				console.log("Got data from music_queue:");
-				console.log(data);
-				var track = data.track;
-				console.log(track);
-				exec("mpc add " + track);
-			}
-		});
-
-		listenOnDatabase(db, "music_actions", 1000, function (err, data) {
-			if (err) {
-				console.log("Error while getting next object of tailable cursor of music_actions:");
-				console.log(err);
-			} else {
-				console.log("Got data from music_actions:");
-				console.log(data);
-				var id = data._id;
-				var command = data.command;
-				console.log(command);
-				exec("mpc " + command, function (err, stdout, stderr) {
-					if (err) {
-						console.log("Error while running command on mpc:");
-						console.log(err);
-					} else {
-						db.collection("music_actions", function (err, collection) {
-							if (err) {
-								console.log("Error finding music_actions to update:");
-								console.log(err);
-							} else {
-								console.log("Successfully found music_actions to update.");
-								collection.update({ _id : id }, { $set : { result : stdout } }, function (err, doc) {
-									if (err) {
-										console.log("Error updating music_action:");
-										console.log(err);
-									} else {
-										console.log("Successfully updated music_action.");
-									}
-								});
-							}
-						});
-					}
-				});
-			}
-		});
-	}
 });
