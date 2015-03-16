@@ -1,0 +1,18 @@
+{
+  "author": "Siddharth Trehan, Alex Huang, Nchinda Nchinda, Rebecca Gallivan <h32talk@mit.edu>",
+  "name": "music-control",
+  "description": "Routes music commands and plays songs from the music queue by communicating with mopidy over the MPD socket",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/trehansiddharth/music-control.git"
+  },
+  "dependencies": {
+    "mongodb" : "~2.0"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {},
+  "engines": {
+    "node": "*"
+  }
+}
