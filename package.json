@@ -8,7 +8,9 @@
     "url": "git://github.com/trehansiddharth/music-control.git"
   },
   "dependencies": {
-    "mongodb" : "~2.0"
+    "mongodb" : "~2.0",
+    "mpd" : "~1.2.0",
+    "mongo-oplog" : "~0.1.6"
   },
   "devDependencies": {},
   "optionalDependencies": {},
