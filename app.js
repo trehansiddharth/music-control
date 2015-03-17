@@ -92,7 +92,7 @@ function handleQuery(query) {
 function node(db, tmp_music_queries) {
 	music_queries = tmp_music_queries;
 	console.log("Fetched music_queries successfully.");
-	var oplog = MongoOplog(mongodbUriLocal, "meteor.music_queries").tail();
+	var oplog = MongoOplog(mongodbUriLocal, MONGO_DATABASE + ".music_queries").tail();
 	oplog.on("insert", function (data) {
 		console.log("Got insert.")
 		handleQuery(data.o);
