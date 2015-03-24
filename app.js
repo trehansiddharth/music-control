@@ -63,22 +63,27 @@ function handleQuery(query) {
 			case "search":
 				var type = arguments[0];
 				var search_query = arguments[1];
-				client.sendCommand(cmd("find", [type, search_query]), function (err, msg) {
+				client.sendCommand(cmd("search", [type, search_query]), function (err, msg) {
 					if (err) {
 						console.log("Error when searching music database:");
 						console.log(err);
 					} else {
-						lines = msg.match(/[^\r\n]+/g);
-						results = [];
-						file = {};
+						var lines = msg.replace("\r\n", "\n").split("\n");
+						var results = [];
+						var file = {};
 						for (i = 0; i < lines.length; i++) {
-							line = lines[i];
-							pair = line.split(": ");
+							var line = lines[i];
+							var pair = line.split(": ");
 							if (pair[0] == "file") {
 								results.push(file);
 								file = {};
 							}
-							file[pair[0]] = pair[1];
+							var attrib = pair[0].toLowerCase().replace("-", "_");
+							var value = pair[1];
+							file[attrib] = value;
+						}
+						if (file != {}) {
+							results.push(file);
 						}
 						results = results.splice(1);
 						resolve(id, results);
