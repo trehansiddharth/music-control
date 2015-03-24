@@ -5,6 +5,8 @@ var MongoOplog = require("mongo-oplog");
 var mpd = require("mpd");
 var cmd = mpd.cmd;
 
+var DEVICE_NAME = process.env.DEVICE_NAME;
+
 var MONGO_USERNAME = process.env.MONGO_USERNAME;
 var MONGO_PASSWORD = process.env.MONGO_PASSWORD;
 var MONGO_HOSTNAME = process.env.MONGO_HOSTNAME;
@@ -127,7 +129,7 @@ function handleQuery(query) {
 function node(db, tmp_music_queries, tmp_device_status) {
 	music_queries = tmp_music_queries;
 	device_status = tmp_device_status;
-	var oplog = MongoOplog(mongodbUriLocal, MONGO_DATABASE + ".music_queries").tail();
+	var oplog = MongoOplog(mongodbUriLocal, MONGO_DATABASE + "." + DEVICE_NAME + "_queries").tail();
 	oplog.on("insert", function (data) {
 		console.log("Got insert.")
 		handleQuery(data.o);
@@ -173,7 +175,7 @@ function update_status(err, msg, cb) {
 		if (cb) {
 			cb(status);
 		} else {
-    		device_status.update({ device_name : "music-control" }, { $set : status } );
+    		device_status.update({ device_name : DEVICE_NAME }, { $set : status } );
 		}
     }
 }
@@ -197,7 +199,7 @@ client.on("ready", function () {
 			console.log(err);
 		} else {
 			console.log("Connected successfully.");
-			db.collection("music_queries", function (err, tmp_music_queries) {
+			db.collection(DEVICE_NAME + "_queries", function (err, tmp_music_queries) {
 				if (err) {
 					console.log("Error while fetching music_queries collection:");
 					console.log(err);
