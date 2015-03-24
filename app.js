@@ -47,6 +47,28 @@ function handleQuery(query) {
 					}
 				});
 				break;
+			case "pause":
+				client.sendCommand(cmd("pause", []), function (err, msg) {
+					if (err) {
+						console.log("Error when pausing:");
+						console.log(err);
+					} else {
+						console.log("Pausing successful.");
+						resolve(id, []);
+					}
+				});
+				break;
+			case "play":
+				client.sendCommand(cmd("play", []), function (err, msg) {
+					if (err) {
+						console.log("Error when playing:");
+						console.log(err);
+					} else {
+						console.log("Playing successful.");
+						resolve(id, []);
+					}
+				});
+				break;
 			case "raw_command":
 				var raw_command = arguments[0];
 				var raw_arguments = arguments.slice(1);
