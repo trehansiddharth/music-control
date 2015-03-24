@@ -5,7 +5,7 @@ This node.js package is a component of the Internet of Things network for the H3
 
 The Internet of Things architecture consists of a central Mongo database and several devices that can connect to the database to report their status, receive queries, and publish commands for other devices to process. This choice of highly centralized architecture makes it easy to add, remove, or update devices without worrying about which connections will have to be added or will be broken. This particular component, music-control, acts as an MPD client that receives commands from the central database and communicates them to an MPD service over an MPD socket on either the local or a remove device. It is meant to be used as a controller for a queue system that manages multiple people who want to play a song by queueing new songs to be played after every song currently on the queue has been played. It reports the current state of the music player, such as which song is currently playing and where in the song the player currently is.
 
-To set up the Internet of Things architecture, create a Mongo database and set up an oplog at the local database. Create the `music_queries` and `music_status` collections for music-control to receive commands and queries and to report music player state, respectively. To install music-control on a device, clone this repository, install dependencies by running `npm install`, set the appropriate environmental variables (explained below), and then run with `node app.js`.
+To set up the Internet of Things architecture, create a Mongo database and set up an oplog at the local database. Create the `music_queries` and `device_status` collections for music-control to receive commands and queries and to report music player state, respectively. To install music-control on a device, clone this repository, install dependencies by running `npm install`, set the appropriate environmental variables (explained below), and then run with `node app.js`.
 
 The environmental variables that music-control looks at are:
 
@@ -41,5 +41,4 @@ Name of command   | Type and index of argument     | Description
                   | `Array(String)` [1:]           | Arguments for the MPD command
 `pause`           |                                | Pauses the music player
 `play`            |                                | Tells the music player to continue playing
-
-Currently, music-control does not report music player state, but it is being actively worked on. This README will be updated with an API for that when support is available.
+`status`          |                                | Returns the current status of the music player

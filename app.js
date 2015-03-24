@@ -21,6 +21,7 @@ console.log("Connecting to database at:");
 console.log(mongodbUri);
 
 music_queries = undefined;
+device_status = undefined;
 
 function resolve(id, result) {
 	music_queries.update({ _id : id }, { $set : { waiting : false, result : result } });
@@ -69,6 +70,13 @@ function handleQuery(query) {
 					}
 				});
 				break;
+			case "status":
+				client.sendCommand(cmd("status", []), function (err, msg) {
+					update_status(err, msg, function(status) {
+						resolve(id, status);
+					});
+				})
+				break;
 			case "raw_command":
 				var raw_command = arguments[0];
 				var raw_arguments = arguments.slice(1);
@@ -116,9 +124,9 @@ function handleQuery(query) {
 	}
 }
 
-function node(db, tmp_music_queries) {
+function node(db, tmp_music_queries, tmp_device_status) {
 	music_queries = tmp_music_queries;
-	console.log("Fetched music_queries successfully.");
+	device_status = tmp_device_status;
 	var oplog = MongoOplog(mongodbUriLocal, MONGO_DATABASE + ".music_queries").tail();
 	oplog.on("insert", function (data) {
 		console.log("Got insert.")
@@ -137,6 +145,37 @@ function node(db, tmp_music_queries) {
 			}
 		});
 	});
+	client.on("system-player", function (data) {
+		console.log("Got status update.")
+		client.sendCommand(cmd("status", []), update_status);
+	});
+	client.sendCommand(cmd("status", []), update_status);
+}
+
+function update_status(err, msg, cb) {
+	if (err) {
+    	console.log("Errow while fetching state.");
+    	console.log(err);
+    } else {
+    	console.log("State fetched successfully");
+		var lines = msg.replace("\r\n", "\n").split("\n");
+		var status = {}
+		for (i = 0; i < lines.length; i++) {
+			var line = lines[i];
+			var pair = line.split(": ");
+			var attrib = pair[0];
+			var value = pair[1];
+			if (attrib && value) {
+				status[attrib] = value;
+			}
+		}
+		console.log(status);
+		if (cb) {
+			cb(status);
+		} else {
+    		device_status.update({ device_name : "music-control" }, { $set : status } );
+		}
+    }
 }
 
 var MPD_HOST = process.env.MPD_HOST;
@@ -163,7 +202,16 @@ client.on("ready", function () {
 					console.log("Error while fetching music_queries collection:");
 					console.log(err);
 				} else {
-					node(db, tmp_music_queries);
+					console.log("music_queries fetched successfully.");
+					db.collection("device_status", function (err, tmp_device_status) {
+						if (err) {
+							console.log("Error while fetching device_status collection:");
+							console.log(err);
+						} else {
+							console.log("device_status fetched successfully.");
+							node(db, tmp_music_queries, tmp_device_status);
+						}
+					});
 				}
 			});
 		}
