@@ -43,3 +43,12 @@ Name of command   | Type and index of argument     | Description
 `pause`           |                                | Pauses the music player
 `play`            |                                | Tells the music player to continue playing
 `status`          |                                | Returns the current status of the music player
+
+music-control reports the following attributes in its device state:
+
+Name of attribute | Type      | Description
+-----------------------------------------------
+`.volume`         | `Int`     | Volume, between 0 and 100
+`.state`          | `String`  | State of the player, either `"play"`, `"pause"`, or `"stop"`
+`.elapsed`        | `Int`     | Number of seconds that have elapsed since the beginning of the song (`null` if no song is currently playing)
+`.song`           | `JSON`    | Information about the currently playing song

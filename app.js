@@ -107,7 +107,7 @@ function handleQuery(query) {
 							var line = lines[i];
 							var pair = line.split(": ");
 							if (pair[0] == "file") {
-								results.push(file);
+								results.push(processSongInfo(file));
 								file = {};
 							}
 							var attrib = pair[0].toLowerCase().replace("-", "_");
@@ -115,7 +115,7 @@ function handleQuery(query) {
 							file[attrib] = value;
 						}
 						if (file != {}) {
-							results.push(file);
+							results.push(processSongInfo(file));
 						}
 						results = results.splice(1);
 						resolve(id, results);
@@ -124,6 +124,30 @@ function handleQuery(query) {
 				break;
 		}
 	}
+}
+
+function getJSON(data) {
+	var lines = data.replace("\r\n", "\n").split("\n");
+	var info = {}
+	for (i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		var pair = line.split(": ");
+		var attrib = pair[0].toLowerCase().replace("-", "_");
+		var value = pair[1];
+		if (attrib && value) {
+			info[attrib] = value;
+		}
+	}
+	return info;	
+}
+
+function processSongInfo(songInfo) {
+	var newSongInfo = songInfo;
+	newSongInfo.time = parseInt(songInfo.time);
+	newSongInfo.track = parseInt(songInfo.track);
+	newSongInfo.pos = parseInt(songInfo.pos);
+	newSongInfo.id = parseInt(songInfo.id);
+	return newSongInfo;
 }
 
 function node(db, tmp_music_queries, tmp_device_status) {
@@ -152,6 +176,9 @@ function node(db, tmp_music_queries, tmp_device_status) {
 		client.sendCommand(cmd("status", []), update_status);
 	});
 	client.sendCommand(cmd("status", []), update_status);
+	setInterval(function () {
+		client.sendCommand(cmd("status", []), update_status);
+	}, 1000);
 }
 
 function update_status(err, msg, cb) {
@@ -160,22 +187,36 @@ function update_status(err, msg, cb) {
     	console.log(err);
     } else {
     	console.log("State fetched successfully");
-		var lines = msg.replace("\r\n", "\n").split("\n");
-		var status = {}
-		for (i = 0; i < lines.length; i++) {
-			var line = lines[i];
-			var pair = line.split(": ");
-			var attrib = pair[0];
-			var value = pair[1];
-			if (attrib && value) {
-				status[attrib] = value;
+    	var info = getJSON(msg);
+		var status = {};
+		status.volume = parseInt(info.volume);
+		status.state = info.state;
+		if (status.state == "stop") {
+			status.elapsed = null;
+			status.song = null;
+			console.log(status);
+			if (cb) {
+				cb(status);
+			} else {
+	    		device_status.update({ device_name : DEVICE_NAME }, { $set : status } );
 			}
-		}
-		console.log(status);
-		if (cb) {
-			cb(status);
 		} else {
-    		device_status.update({ device_name : DEVICE_NAME }, { $set : status } );
+			status.elapsed = parseInt(info.elapsed);
+			client.sendCommand(cmd("currentsong", []), function (err, msg) {
+				if (err) {
+					console.log("Error getting info about current song:");
+					console.log(err);
+				} else {
+					var currentSongInfo = processSongInfo(getJSON(msg));
+					status.song = currentSongInfo;
+					console.log(status);
+					if (cb) {
+						cb(status);
+					} else {
+			    		device_status.update({ device_name : DEVICE_NAME }, { $set : status }, { upsert : true } );
+					}
+				}
+			});
 		}
     }
 }
